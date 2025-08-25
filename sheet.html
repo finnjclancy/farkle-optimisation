@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>farkle roll or bank cutoffs</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box }
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px }
+  h1 { margin: 0 0 8px; font-size: 28px; color: #0369a1 }
+  p { margin: 6px 0 14px; color: #475569 }
+  .card {
+    background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 16px; margin: 16px 0; box-shadow: 0 2px 6px rgba(0,0,0,.05)
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px }
+  th, td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; font-size: 14px; text-align: left }
+  th { background: #0ea5e9; color: white; text-transform: uppercase; font-size: 12px; letter-spacing: .5px }
+  .muted { color: #64748b; font-size: 13px }
+  .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #e0f2fe; color: #0369a1; font-weight: 600; font-size: 12px }
+  .ok { color: #059669; font-weight: 700 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>farkle roll or bank cutoffs</h1>
+  <p class="muted">
+    this table shows the cutoff for each dice count. bank if your score is at or above the cutoff. roll if your score is below it.
+  </p>
+
+  <div class="card">
+    <span class="pill">notes</span>
+    <p class="muted">
+      math uses exact points. no ten point bins here. rules match your app. one is one hundred. five is fifty. three ones is three hundred. four with a pair is fifteen hundred. straight is fifteen hundred. three pairs is fifteen hundred. two triplets is twenty five hundred.
+    </p>
+  </div>
+
+  <div id="table" class="card">
+    <span class="pill">cutoff table</span>
+    <table role="table" aria-label="cutoff table">
+      <thead>
+        <tr>
+          <th>dice to roll</th>
+          <th>farkle chance</th>
+          <th>bank if score is at least</th>
+          <th>roll if score is less than</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="muted" id="status">building table. this can take a few seconds on old phones.</p>
+  </div>
+
+  <div class="card">
+    <span class="pill">how to read</span>
+    <p class="muted">
+      find how many dice you will roll. look at the cutoff. if your score is at or above that number then bank. if it is below that number then roll.
+    </p>
+    <p class="muted">
+      example. you will roll three dice. the cutoff shows two thousand three hundred. your score is two thousand four hundred. bank. if your score is two thousand one hundred. roll.
+    </p>
+  </div>
+</div>
+
+<script>
+/*** scoring ***/
+const RULE_POINTS = {
+  straight: 1500,
+  three_pairs: 1500,
+  two_triplets: 2500,
+  four_with_pair: 1500,
+  four_kind: 1000,
+  five_kind: 2000,
+  six_kind: 3000,
+};
+
+function countFaces(dice){
+  const c = {1:0,2:0,3:0,4:0,5:0,6:0};
+  for(const d of dice) c[d]++;
+  return c;
+}
+function isStraight(c){
+  return c[1]===1 && c[2]===1 && c[3]===1 && c[4]===1 && c[5]===1 && c[6]===1;
+}
+function isThreePairs(c){
+  let p=0; for(let f=1; f<=6; f++) if(c[f]===2) p++; return p===3;
+}
+function isTwoTriplets(c){
+  let t=0; for(let f=1; f<=6; f++) if(c[f]===3) t++; return t===2;
+}
+function hasFourWithPair(c){
+  let h4=false, h2=false;
+  for(let f=1; f<=6; f++){ if(c[f]===4) h4=true; if(c[f]===2) h2=true; }
+  return h4 && h2;
+}
+
+function scoreRoll(dice){
+  const n = dice.length;
+  const comps = {};
+  let used = 0;
+  let total = 0;
+  const c = countFaces(dice);
+
+  if(n===6){
+    if(isStraight(c)){ total += RULE_POINTS.straight; used=6; return { total, used, comps: {straight: RULE_POINTS.straight} }; }
+    if(isThreePairs(c)){ total += RULE_POINTS.three_pairs; used=6; return { total, used, comps: {three_pairs: RULE_POINTS.three_pairs} }; }
+    if(isTwoTriplets(c)){ total += RULE_POINTS.two_triplets; used=6; return { total, used, comps: {two_triplets: RULE_POINTS.two_triplets} }; }
+    if(hasFourWithPair(c)){ total += RULE_POINTS.four_with_pair; used=6; return { total, used, comps: {four_with_pair: RULE_POINTS.four_with_pair} }; }
+  }
+
+  for(let f=1; f<=6; f++){
+    if(c[f]===6){ total += RULE_POINTS.six_kind; used=6; return { total, used, comps: {six_kind: RULE_POINTS.six_kind} }; }
+  }
+  for(let f=1; f<=6; f++){
+    if(c[f]===5){
+      total += RULE_POINTS.five_kind; used += 5; c[f]-=5;
+      if(c[1]>0){ total += 100*c[1]; used += c[1]; c[1]=0; }
+      if(c[5]>0){ total += 50*c[5]; used += c[5]; c[5]=0; }
+      return { total, used, comps: {} };
+    }
+  }
+  for(let f=1; f<=6; f++){
+    if(c[f]===4){
+      total += RULE_POINTS.four_kind; used += 4; c[f]-=4;
+      if(c[1]>0){ total += 100*c[1]; used += c[1]; c[1]=0; }
+      if(c[5]>0){ total += 50*c[5]; used += c[5]; c[5]=0; }
+      return { total, used, comps: {} };
+    }
+  }
+  for(let f=1; f<=6; f++){
+    if(c[f]>=3){
+      const pts = (f===1) ? 300 : f*100;
+      total += pts; used += 3; c[f]-=3;
+    }
+  }
+  if(c[1]>0){ total += 100*c[1]; used += c[1]; c[1]=0; }
+  if(c[5]>0){ total += 50*c[5]; used += c[5]; c[5]=0; }
+  return { total, used, comps: {} };
+}
+
+/*** outcome precompute ***/
+const pre = new Array(7);
+const farkleP = new Array(7).fill(0);
+
+function precomputeOutcomes(){
+  for(let k=1;k<=6;k++){
+    const total = 6**k;
+    const map = new Map();
+    let nonf = 0;
+    for(let i=0;i<total;i++){
+      let x = i;
+      const dice = new Array(k);
+      for(let j=0;j<k;j++){ dice[j] = (x % 6) + 1; x = Math.floor(x/6); }
+      const { total: delta, used } = scoreRoll(dice);
+      if(delta>0){
+        const rem = (used===k) ? 6 : k - used;
+        const key = delta + "_" + rem;
+        map.set(key, (map.get(key)||0) + 1);
+        nonf++;
+      }
+    }
+    const arr = [];
+    map.forEach((count, key)=>{
+      const [d,r] = key.split("_");
+      arr.push({ delta: parseInt(d,10), rem: parseInt(r,10), count });
+    });
+    pre[k] = arr;
+    farkleP[k] = (total - nonf) / total;
+  }
+}
+
+/*** dynamic program ***/
+const MAX_S = 10000;
+const V = Array.from({length:7}, ()=> new Float64Array(MAX_S+1));
+
+function computeEVRoll(k, S){
+  const outcomes = pre[k];
+  const total = 6**k;
+  let sum = 0;
+  for(const o of outcomes){
+    const nextS = S + o.delta;
+    let nextV = nextS;
+    if(nextS <= MAX_S){
+      nextV = V[o.rem][nextS];
+    }
+    sum += o.count * nextV;
+  }
+  return sum / total;
+}
+
+function buildDP(){
+  precomputeOutcomes();
+  for(let k=0;k<=6;k++){
+    for(let s=0;s<=MAX_S;s++){
+      V[k][s] = s;
+    }
+  }
+  for(let s=MAX_S; s>=0; s--){
+    for(let k=1; k<=6; k++){
+      const ev = computeEVRoll(k, s);
+      V[k][s] = Math.max(s, ev);
+    }
+  }
+}
+
+/*** cutoff finder ***/
+function cutoffForK(k){
+  // smallest s where bank is at least as good as rolling
+  for(let s=0; s<=MAX_S; s++){
+    const ev = computeEVRoll(k, s);
+    if(s >= ev) return s;
+  }
+  return MAX_S;
+}
+
+/*** render ***/
+function pct(x){ return (x*100).toFixed(2) + "%" }
+
+function renderTable(){
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '';
+  for(let k=1;k<=6;k++){
+    const cut = cutoffForK(k);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${k}</td>
+      <td>${pct(farkleP[k])}</td>
+      <td><span class="ok">${cut}</span></td>
+      <td>${cut}</td>
+    `;
+    rows.appendChild(tr);
+  }
+  const s = document.getElementById('status');
+  s.textContent = 'done. if your score is at or above the cutoff then bank. if it is below the cutoff then roll.';
+}
+
+/*** run ***/
+setTimeout(() => {
+  buildDP();
+  renderTable();
+}, 0);
+</script>
+</body>
+</html>

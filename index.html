@@ -136,6 +136,12 @@
       transform: translateY(0);
     }
 
+    .calculate-btn:focus {
+      outline: none;
+      border-color: #0ea5e9;
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+    }
+
     .reset-btn {
       padding: 14px 24px;
       border: 0;
@@ -156,6 +162,12 @@
 
     .reset-btn:active {
       transform: translateY(0);
+    }
+
+    .reset-btn:focus {
+      outline: none;
+      border-color: #6b7280;
+      box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
     }
     
     .card { 
@@ -263,7 +275,7 @@
     
     .small { 
       font-size: 12px; 
-    }
+      }
     
     .section-title {
       font-size: 1.1rem;
@@ -319,6 +331,405 @@
       }
     }
   </style>
+
+  <!-- script moved earlier; wrapped in domcontentloaded; defer included -->
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      // helper to make dropdown inputs
+      (function initInputs(){
+        const wrap = document.getElementById('inputs');
+        for(let i=0;i<6;i++){
+          const diceContainer = document.createElement('div');
+          diceContainer.className = 'dice-input';
+          
+          const label = document.createElement('label');
+          label.className = 'dice-label';
+          label.textContent = 'die ' + (i+1);
+          label.htmlFor = 'die' + (i+1);
+          
+          const select = document.createElement('select');
+          select.id = 'die' + (i+1);
+          select.setAttribute('aria-label', 'die ' + (i+1));
+          
+          // add empty option
+          const emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = '--';
+          select.appendChild(emptyOption);
+          
+          // add number options 1-6
+          for(let j=1; j<=6; j++){
+            const option = document.createElement('option');
+            option.value = j;
+            option.textContent = j;
+            select.appendChild(option);
+          }
+          
+          diceContainer.appendChild(label);
+          diceContainer.appendChild(select);
+          wrap.appendChild(diceContainer);
+        }
+      })();
+
+      const RULE_POINTS = {
+        straight: 1500,
+        three_pairs: 1500,
+        two_triplets: 2500,
+        four_with_pair: 1500,
+        four_kind: 1000,
+        five_kind: 2000,
+        six_kind: 3000,
+      };
+
+      function countFaces(dice){
+        const c = {1:0,2:0,3:0,4:0,5:0,6:0};
+        for(const d of dice) c[d]++;
+        return c;
+      }
+
+      function isStraight(c){
+        return c[1]===1 && c[2]===1 && c[3]===1 && c[4]===1 && c[5]===1 && c[6]===1;
+      }
+
+      function isThreePairs(c){
+        let pairs = 0;
+        for(let f=1; f<=6; f++) if(c[f]===2) pairs++;
+        return pairs===3;
+      }
+
+      function isTwoTriplets(c){
+        let trips=0;
+        for(let f=1; f<=6; f++) if(c[f]===3) trips++;
+        return trips===2;
+      }
+
+      function hasFourWithPair(c){
+        let has4=false, has2=false;
+        for(let f=1; f<=6; f++){
+          if(c[f]===4) has4=true;
+          if(c[f]===2) has2=true;
+        }
+        return has4 && has2;
+      }
+
+      // score a roll with detailed components and used dice count
+      function scoreRoll(dice){
+        const n = dice.length;
+        const comps = {}; // rule -> points
+        let used = 0;
+        let total = 0;
+        const c = countFaces(dice);
+
+        // all dice specials that use all six
+        if(n===6){
+          if(isStraight(c)){
+            comps.straight = RULE_POINTS.straight; total += comps.straight; used=6; return { total, comps, used };
+          }
+          if(isThreePairs(c)){
+            comps.three_pairs = RULE_POINTS.three_pairs; total += comps.three_pairs; used=6; return { total, comps, used };
+          }
+          if(isTwoTriplets(c)){
+            comps.two_triplets = RULE_POINTS.two_triplets; total += comps.two_triplets; used=6; return { total, comps, used };
+          }
+          if(hasFourWithPair(c)){
+            comps.four_with_pair = RULE_POINTS.four_with_pair; total += comps.four_with_pair; used=6; return { total, comps, used };
+          }
+        }
+
+        // six of a kind
+        for(let f=1; f<=6; f++){
+          if(c[f]===6){
+            comps.six_kind = RULE_POINTS.six_kind; total += comps.six_kind; used = 6; return { total, comps, used };
+          }
+        }
+
+        // five of a kind
+        for(let f=1; f<=6; f++){
+          if(c[f]===5){
+            comps.five_kind = RULE_POINTS.five_kind; total += comps.five_kind; used += 5; c[f]-=5;
+            // leftover single can score if 1 or 5
+            if(c[1]>0){ comps.single_1 = (comps.single_1||0) + 100*c[1]; total += 100*c[1]; used += c[1]; c[1]=0; }
+            if(c[5]>0){ comps.single_5 = (comps.single_5||0) + 50*c[5]; total += 50*c[5]; used += c[5]; c[5]=0; }
+            return { total, comps, used };
+          }
+        }
+
+        // four of a kind without a pair
+        for(let f=1; f<=6; f++){
+          if(c[f]===4){
+            comps.four_kind = RULE_POINTS.four_kind; total += comps.four_kind; used += 4; c[f]-=4;
+            // remaining dice may score singles 1 or 5
+            if(c[1]>0){ comps.single_1 = (comps.single_1||0) + 100*c[1]; total += 100*c[1]; used += c[1]; c[1]=0; }
+            if(c[5]>0){ comps.single_5 = (comps.single_5||0) + 50*c[5]; total += 50*c[5]; used += c[5]; c[5]=0; }
+            return { total, comps, used };
+          }
+        }
+
+        // three of a kind
+        for(let f=1; f<=6; f++){
+          if(c[f]>=3){
+            const pts = (f===1) ? 300 : f*100;
+            comps['three_kind_'+f] = (comps['three_kind_'+f]||0) + pts;
+            total += pts; used += 3; c[f]-=3;
+          }
+        }
+
+        // singles of 1 and 5 that remain
+        if(c[1]>0){ comps.single_1 = (comps.single_1||0) + 100*c[1]; total += 100*c[1]; used += c[1]; c[1]=0; }
+        if(c[5]>0){ comps.single_5 = (comps.single_5||0) + 50*c[5]; total += 50*c[5]; used += c[5]; c[5]=0; }
+
+        return { total, comps, used };
+      }
+
+      // enumerate all outcomes for n dice, compute expected values per rule
+      function enumerateOutcomes(n){
+        if (n === 0) {
+          return { byRule: [], totalEV: 0, farkleProb: 0, outcomes: 1 }; // fixed
+        }
+        const totalOutcomes = Math.pow(6, n);
+        const ev = {}; // rule -> sum of points
+        const ruleCounts = {}; // rule -> count of occurrences
+        let farkleCount = 0;
+        for(let i=0;i<totalOutcomes;i++){
+          // base 6 counter
+          let x = i;
+          const dice = new Array(n);
+          for(let k=0;k<n;k++){
+            dice[k] = (x % 6) + 1; x = Math.floor(x/6);
+          }
+          const scored = scoreRoll(dice);
+          if(scored.total===0) farkleCount++;
+          for(const [rule, pts] of Object.entries(scored.comps)){
+            ev[rule] = (ev[rule]||0) + pts;
+            ruleCounts[rule] = (ruleCounts[rule]||0) + 1;
+          }
+        }
+        const result = [];
+        for(const [rule, sumPts] of Object.entries(ev)){
+          result.push({
+            rule,
+            probability: ruleCounts[rule] / totalOutcomes,
+            ev: sumPts / totalOutcomes
+          });
+        }
+        result.sort((a,b)=> b.ev - a.ev);
+        const totalEV = result.reduce((s,r)=>s+r.ev,0);
+        const farkleProb = farkleCount / totalOutcomes;
+        return { byRule: result, totalEV, farkleProb, outcomes: totalOutcomes };
+      }
+
+      function formatRuleName(key){
+        if(key.startsWith('three_kind_')) return 'three of a kind for ' + key.split('_').pop();
+        if(key==='single_1') return 'single one';
+        if(key==='single_5') return 'single five';
+        if(key==='four_with_pair') return 'four with a pair';
+        if(key==='four_kind') return 'four of a kind only';
+        if(key==='five_kind') return 'five of a kind';
+        if(key==='six_kind') return 'six of a kind';
+        if(key==='straight') return 'straight one to six';
+        if(key==='three_pairs') return 'three pairs';
+        if(key==='two_triplets') return 'two triplets';
+        return key.replace(/_/g,' '); // replaced replaceAll
+      }
+
+      // dp grid step reduced to ten for less rounding bias
+      const MIN_STEP = 10;      // was 50
+      const MAX_S = 10000;
+      const NUM_S = Math.floor(MAX_S / MIN_STEP) + 1;
+      const V = Array.from({length: 7}, () => new Array(NUM_S).fill(0));
+      const precomputed_outcomes = new Array(7);
+      const farkleProbs = new Array(7).fill(0);
+
+      function precomputeOutcomes() {
+        for (let k = 1; k <= 6; k++) {
+          const total = Math.pow(6, k);
+          const outcomeMap = new Map();
+          let nonfCount = 0;
+          for (let i = 0; i < total; i++) {
+            let x = i;
+            const dice = new Array(k);
+            for (let j = 0; j < k; j++) {
+              dice[j] = (x % 6) + 1;
+              x = Math.floor(x / 6);
+            }
+            const { total: delta, used } = scoreRoll(dice);
+            if (delta > 0) {
+              const rem = (used === k) ? 6 : k - used;
+              const key = `${delta}_${rem}`;
+              outcomeMap.set(key, (outcomeMap.get(key) || 0) + 1);
+              nonfCount++;
+            }
+          }
+          const outcomes_arr = [];
+          outcomeMap.forEach((count, key) => {
+            const [d_str, r_str] = key.split('_');
+            outcomes_arr.push({ delta: parseInt(d_str), rem: parseInt(r_str), count });
+          });
+          precomputed_outcomes[k] = outcomes_arr;
+          farkleProbs[k] = (total - nonfCount) / total;
+        }
+      }
+
+      function precomputeV() {
+        precomputeOutcomes();
+        // Initialize V to S for all
+        for (let k = 0; k <= 6; k++) {
+          for (let si = 0; si < NUM_S; si++) {
+            V[k][si] = si * MIN_STEP;
+          }
+        }
+        // Compute from high S to low
+        for (let si = NUM_S - 1; si >= 0; si--) {
+          const S = si * MIN_STEP;
+          for (let k = 1; k <= 6; k++) {
+            const ev = computeEVRoll(k, S);
+            V[k][si] = Math.max(S, ev);
+          }
+        }
+      }
+
+      function computeEVRoll(k, S) {
+        const outcomes = precomputed_outcomes[k];
+        const total = Math.pow(6, k);
+        let sum = 0;
+        for (const o of outcomes) {
+          const next_s = S + o.delta;
+          let next_v = next_s;
+          if (next_s <= MAX_S) {
+            const next_si = Math.floor(next_s / MIN_STEP);
+            next_v = V[o.rem][next_si];
+          }
+          sum += o.count * next_v;
+        }
+        return sum / total;
+      }
+
+      precomputeV();
+
+      function computeCurrentScoreAndDiceLeft(){
+        const nodes = Array.from(document.querySelectorAll('#inputs select'));
+        const dice = nodes.map(n=>{
+          const v = n.value.trim();
+          if(v==='') return null; const x = parseInt(v,10); if(!Number.isFinite(x) || x<1 || x>6) return null; return x;
+        }).filter(v=>v!==null);
+
+        const blanks = nodes.filter(n=>n.value.trim()==='').length;
+
+        const scored = scoreRoll(dice);
+        // dice used are scoring dice among the entered set
+        const nonScoringAmongEntered = dice.length - scored.used;
+        let diceLeft = blanks + nonScoringAmongEntered;
+
+        // hot dice
+        if (diceLeft === 0 && scored.used > 0) {
+          diceLeft = 6;
+        }
+
+        return { currentDice: dice, currentScore: scored.total, comps: scored.comps, diceLeft };
+      }
+
+      function render(){
+        const results = document.getElementById('results');
+        const quick = document.getElementById('quick');
+        const { currentDice, currentScore, comps, diceLeft } = computeCurrentScoreAndDiceLeft();
+        const next = enumerateOutcomes(diceLeft);
+        const full_ev = diceLeft > 0 ? computeEVRoll(diceLeft, currentScore) : currentScore;
+        const shouldRoll = full_ev > currentScore;
+
+        // quick kpis
+        let q = '';
+        q += '<div class="card">';
+        q += '<div class="kpi">';
+        q += `<div class="box"><div class="label">current score</div><div class="value">${currentScore}</div></div>`;
+        q += `<div class="box"><div class="label">immediate ev next roll</div><div class="value">${next.totalEV.toFixed(2)}</div></div>`;
+        q += `<div class="box"><div class="label">full ev if roll</div><div class="value">${full_ev.toFixed(2)}</div></div>`;
+        const decision = shouldRoll ? 'roll again' : 'bank it';
+        q += `<div class="box"><div class="label">decision</div><div class="value ${shouldRoll?'good':'bad'}">${decision}</div></div>`;
+        q += `<div class="box"><div class="label">farkle percent</div><div class="value">${(next.farkleProb*100).toFixed(2)}%</div></div>`;
+        q += '</div></div>';
+        quick.innerHTML = q;
+
+        let html = '';
+        html += '<div class="card"><div class="grid">';
+        html += '<div><div class="pill">your roll</div><p class="muted">' + (currentDice.length? currentDice.join(', ') : 'none') + '</p></div>';
+        html += '<div><div class="pill">dice to roll next</div><p>' + diceLeft + '</p><p class="muted small">dice to roll equals blanks plus non scoring dice in the entered set</p></div>';
+        html += '<div><div class="pill">farkle chance next</div><p>' + (next.farkleProb*100).toFixed(2) + '%</p></div>';
+        html += '</div></div>';
+
+        // decision card
+        html += '<div class="card">';
+        html += '<div class="section-title"><span class="pill">advice</span></div>';
+        html += '<p class="' + (shouldRoll? 'good':'bad') + '" style="font-size: 18px; font-weight: 600;">' + (shouldRoll? 'roll again' : 'bank it') + '</p>';
+        html += '<p class="muted small">rule used: roll if expected turn score is greater than current score. dp uses score bins of 10.</p>';
+        html += '</div>';
+
+        // rule table
+        html += '<div class="card">';
+        html += '<div class="section-title"><span class="pill">immediate expected value by rule for next roll</span></div>';
+        html += '<table role="table"><thead><tr><th>rule</th><th>prob</th><th>ev</th></tr></thead><tbody>';
+        next.byRule.forEach(row=>{
+          html += `<tr><td>${formatRuleName(row.rule)}</td><td>${(row.probability*100).toFixed(2)}%</td><td>${row.ev.toFixed(2)}</td></tr>`;
+        });
+        html += `<tr><td><strong>total</strong></td><td></td><td><strong>${next.totalEV.toFixed(2)}</strong></td></tr>`;
+        html += '</tbody></table>';
+        html += `<p class="muted small">outcomes considered ${next.outcomes}. ev sums all rule parts from the scoring logic. rules do not overlap. four with a pair is kept separate from four only. singles are counted only when dice remain after sets. this is immediate only.</p>`;
+        html += '</div>';
+
+        // current breakdown
+        html += '<div class="card">';
+        html += '<div class="section-title"><span class="pill">current roll breakdown</span></div>';
+        if(Object.keys(comps).length===0){
+          html += '<p class="muted">no points yet.</p>';
+        }else{
+          html += '<table role="table"><thead><tr><th>rule</th><th>points</th></tr></thead><tbody>';
+          for(const [k,v] of Object.entries(comps)){
+            html += `<tr><td>${formatRuleName(k)}</td><td>${v}</td></tr>`;
+          }
+          html += `<tr><td><strong>total</strong></td><td><strong>${currentScore}</strong></td></tr>`;
+          html += '</tbody></table>';
+        }
+        html += '</div>';
+
+        // rules section
+        html += '<div class="card">';
+        html += '<div class="section-title"><span class="pill">rules</span></div>';
+        html += '<ul class="rules-list">';
+        html += '<li>one gives 100</li>';
+        html += '<li>five gives 50</li>';
+        html += '<li>three ones gives 300</li>';
+        html += '<li>three twos gives 200</li>';
+        html += '<li>three threes gives 300</li>';
+        html += '<li>three fours gives 400</li>';
+        html += '<li>three fives gives 500</li>';
+        html += '<li>three sixes gives 600</li>';
+        html += '<li>four of a kind gives 1000</li>';
+        html += '<li>five of a kind gives 2000</li>';
+        html += '<li>six of a kind gives 3000</li>';
+        html += '<li>four with a pair gives 1500</li>';
+        html += '<li>one to six straight gives 1500</li>';
+        html += '<li>three pairs gives 1500</li>';
+        html += '<li>two triplets gives 2500</li>';
+        html += '</ul>';
+        html += '</div>';
+
+        results.innerHTML = html;
+      }
+
+      // reset
+      function resetDice() {
+        const diceSelects = document.querySelectorAll('#inputs select');
+        diceSelects.forEach(select => { select.value = ''; });
+        render();
+      }
+
+      // wire up buttons with type set to button
+      document.getElementById('calcBtn').addEventListener('click', render);
+      document.getElementById('resetBtn').addEventListener('click', resetDice);
+
+      // initial render
+      render();
+    });
+  </script>
 </head>
 <body>
   <div class="container">
@@ -331,346 +742,13 @@
       <h2>your dice</h2>
       <div class="row" id="inputs"></div>
       <div class="row" style="margin-top: 20px;">
-        <button class="calculate-btn" id="calcBtn">calculate</button>
-        <button class="reset-btn" id="resetBtn">reset</button>
+        <button class="calculate-btn" id="calcBtn" type="button">calculate</button>
+        <button class="reset-btn" id="resetBtn" type="button">reset</button>
       </div>
     </div>
 
     <div id="quick"></div>
     <div id="results"></div>
   </div>
-
-<script>
-// helper to make dropdown inputs
-(function initInputs(){
-  const wrap = document.getElementById('inputs');
-  for(let i=0;i<6;i++){
-    const diceContainer = document.createElement('div');
-    diceContainer.className = 'dice-input';
-    
-    const label = document.createElement('div');
-    label.className = 'dice-label';
-    label.textContent = 'die ' + (i+1);
-    
-    const select = document.createElement('select');
-    select.id = 'die' + (i+1);
-    
-    // add empty option
-    const emptyOption = document.createElement('option');
-    emptyOption.value = '';
-    emptyOption.textContent = '--';
-    select.appendChild(emptyOption);
-    
-    // add number options 1-6
-    for(let j=1; j<=6; j++){
-      const option = document.createElement('option');
-      option.value = j;
-      option.textContent = j;
-      select.appendChild(option);
-    }
-    
-    diceContainer.appendChild(label);
-    diceContainer.appendChild(select);
-    wrap.appendChild(diceContainer);
-  }
-})();
-
-const RULE_POINTS = {
-  straight: 1500,
-  three_pairs: 1500,
-  two_triplets: 2500,
-  four_with_pair: 1500,
-  four_kind: 1000,
-  five_kind: 2000,
-  six_kind: 3000,
-};
-
-function countFaces(dice){
-  const c = {1:0,2:0,3:0,4:0,5:0,6:0};
-  for(const d of dice) c[d]++;
-  return c;
-}
-
-function isStraight(c){
-  return c[1]===1 && c[2]===1 && c[3]===1 && c[4]===1 && c[5]===1 && c[6]===1;
-}
-
-function isThreePairs(c){
-  let pairs = 0;
-  for(let f=1; f<=6; f++) if(c[f]===2) pairs++;
-  return pairs===3;
-}
-
-function isTwoTriplets(c){
-  let trips=0;
-  for(let f=1; f<=6; f++) if(c[f]===3) trips++;
-  return trips===2;
-}
-
-function hasFourWithPair(c){
-  let has4=false, has2=false;
-  for(let f=1; f<=6; f++){
-    if(c[f]===4) has4=true;
-    if(c[f]===2) has2=true;
-  }
-  return has4 && has2;
-}
-
-// score a roll with detailed components and used dice count
-function scoreRoll(dice){
-  const n = dice.length;
-  const comps = {}; // rule -> points
-  let used = 0;
-  let total = 0;
-  const c = countFaces(dice);
-
-  // all dice specials that use all six
-  if(n===6){
-    if(isStraight(c)){
-      comps.straight = RULE_POINTS.straight; total += comps.straight; used=6; return { total, comps, used };
-    }
-    if(isThreePairs(c)){
-      comps.three_pairs = RULE_POINTS.three_pairs; total += comps.three_pairs; used=6; return { total, comps, used };
-    }
-    if(isTwoTriplets(c)){
-      comps.two_triplets = RULE_POINTS.two_triplets; total += comps.two_triplets; used=6; return { total, comps, used };
-    }
-    if(hasFourWithPair(c)){
-      comps.four_with_pair = RULE_POINTS.four_with_pair; total += comps.four_with_pair; used=6; return { total, comps, used };
-    }
-  }
-
-  // six of a kind
-  for(let f=1; f<=6; f++){
-    if(c[f]===6){
-      comps.six_kind = RULE_POINTS.six_kind; total += comps.six_kind; used = 6; return { total, comps, used };
-    }
-  }
-
-  // five of a kind
-  for(let f=1; f<=6; f++){
-    if(c[f]===5){
-      comps.five_kind = RULE_POINTS.five_kind; total += comps.five_kind; used += 5; c[f]-=5;
-      // leftover single can score if 1 or 5
-      if(c[1]>0){ comps.single_1 = (comps.single_1||0) + 100*c[1]; total += 100*c[1]; used += c[1]; c[1]=0; }
-      if(c[5]>0){ comps.single_5 = (comps.single_5||0) + 50*c[5]; total += 50*c[5]; used += c[5]; c[5]=0; }
-      return { total, comps, used };
-    }
-  }
-
-  // four of a kind without a pair
-  for(let f=1; f<=6; f++){
-    if(c[f]===4){
-      comps.four_kind = RULE_POINTS.four_kind; total += comps.four_kind; used += 4; c[f]-=4;
-      // remaining dice may score singles 1 or 5
-      if(c[1]>0){ comps.single_1 = (comps.single_1||0) + 100*c[1]; total += 100*c[1]; used += c[1]; c[1]=0; }
-      if(c[5]>0){ comps.single_5 = (comps.single_5||0) + 50*c[5]; total += 50*c[5]; used += c[5]; c[5]=0; }
-      return { total, comps, used };
-    }
-  }
-
-  // three of a kind can be at most one now for n<=5 or any for n
-  for(let f=1; f<=6; f++){
-    if(c[f]>=3){
-      const pts = (f===1) ? 300 : f*100;
-      comps['three_kind_'+f] = (comps['three_kind_'+f]||0) + pts;
-      total += pts; used += 3; c[f]-=3;
-    }
-  }
-
-  // singles of 1 and 5 that remain
-  if(c[1]>0){ comps.single_1 = (comps.single_1||0) + 100*c[1]; total += 100*c[1]; used += c[1]; c[1]=0; }
-  if(c[5]>0){ comps.single_5 = (comps.single_5||0) + 50*c[5]; total += 50*c[5]; used += c[5]; c[5]=0; }
-
-  return { total, comps, used };
-}
-
-// enumerate all outcomes for n dice, compute expected values per rule
-function enumerateOutcomes(n){
-  if (n === 0) {
-    return { byRule: [], totalEV: 0, farkleProb: 1, outcomes: 1 };
-  }
-  const totalOutcomes = Math.pow(6, n);
-  const ev = {}; // rule -> sum of points across all outcomes
-  let farkleCount = 0;
-  for(let i=0;i<totalOutcomes;i++){
-    // base 6 counter
-    let x = i;
-    const dice = new Array(n);
-    for(let k=0;k<n;k++){
-      dice[k] = (x % 6) + 1; x = Math.floor(x/6);
-    }
-    const scored = scoreRoll(dice);
-    if(scored.total===0) farkleCount++;
-    for(const [rule, pts] of Object.entries(scored.comps)){
-      ev[rule] = (ev[rule]||0) + pts;
-    }
-  }
-  // compute probabilities per rule with second pass
-  const ruleCounts = {};
-  for(let i=0;i<totalOutcomes;i++){
-    let x = i; const dice = new Array(n);
-    for(let k=0;k<n;k++){ dice[k] = (x % 6) + 1; x = Math.floor(x/6); }
-    const scored = scoreRoll(dice);
-    for(const rule of Object.keys(scored.comps)){
-      ruleCounts[rule] = (ruleCounts[rule]||0) + 1;
-    }
-  }
-  const result = [];
-  for(const [rule, sumPts] of Object.entries(ev)){
-    result.push({
-      rule,
-      probability: ruleCounts[rule] / totalOutcomes,
-      ev: sumPts / totalOutcomes
-    });
-  }
-  result.sort((a,b)=> b.ev - a.ev);
-  const totalEV = result.reduce((s,r)=>s+r.ev,0);
-  const farkleProb = farkleCount / totalOutcomes;
-  return { byRule: result, totalEV, farkleProb, outcomes: totalOutcomes };
-}
-
-function formatRuleName(key){
-  if(key.startsWith('three_kind_')) return 'three of a kind for ' + key.split('_').pop();
-  if(key==='single_1') return 'single one';
-  if(key==='single_5') return 'single five';
-  if(key==='four_with_pair') return 'four with a pair';
-  if(key==='four_kind') return 'four of a kind only';
-  if(key==='five_kind') return 'five of a kind';
-  if(key==='six_kind') return 'six of a kind';
-  if(key==='straight') return 'straight one to six';
-  if(key==='three_pairs') return 'three pairs';
-  if(key==='two_triplets') return 'two triplets';
-  return key.replaceAll('_',' ');
-}
-
-function computeCurrentScoreAndDiceLeft(){
-  const nodes = Array.from(document.querySelectorAll('#inputs select'));
-  const dice = nodes.map(n=>{
-    const v = n.value.trim();
-    if(v==='') return null; const x = parseInt(v,10); if(!Number.isFinite(x) || x<1 || x>6) return null; return x;
-  }).filter(v=>v!==null);
-
-  const blanks = nodes.filter(n=>n.value.trim()==='').length;
-
-  const scored = scoreRoll(dice);
-  // dice used are scoring dice among the entered set
-  const nonScoringAmongEntered = dice.length - scored.used;
-  let diceLeft = blanks + nonScoringAmongEntered;
-
-  // If all dice used for scoring result in 0 dice left to roll,
-  // it's "hot dice", so the player gets to roll all 6 again.
-  if (diceLeft === 0 && scored.used > 0) {
-    diceLeft = 6;
-  }
-
-  return { currentDice: dice, currentScore: scored.total, comps: scored.comps, diceLeft };
-}
-
-function render(){
-  const results = document.getElementById('results');
-  const quick = document.getElementById('quick');
-  const { currentDice, currentScore, comps, diceLeft } = computeCurrentScoreAndDiceLeft();
-  const next = enumerateOutcomes(Math.max(0, diceLeft));
-
-  const shouldRoll = next.totalEV > next.farkleProb * currentScore;
-
-  // quick kpis right under the button
-  let q = '';
-  q += '<div class="card">';
-  q += '<div class="kpi">';
-  q += `<div class="box"><div class="label">current score</div><div class="value">${currentScore}</div></div>`;
-  q += `<div class="box"><div class="label">ev next roll</div><div class="value">${next.totalEV.toFixed(2)}</div></div>`;
-  const decision = shouldRoll ? 'roll again' : 'bank it';
-  const risk = currentScore * next.farkleProb;
-  q += `<div class="box"><div class="label">decision</div><div class="value ${shouldRoll?'good':'bad'}">${decision}</div><div class="label small">risk ${risk.toFixed(2)} vs. EV ${next.totalEV.toFixed(2)}</div></div>`;
-  q += `<div class="box"><div class="label">farkle percent</div><div class="value">${(next.farkleProb*100).toFixed(2)}%</div></div>`;
-  q += '</div></div>';
-  quick.innerHTML = q;
-
-  let html = '';
-  html += '<div class="card"><div class="grid">';
-  html += '<div><div class="pill">your roll</div><p class="muted">' + (currentDice.length? currentDice.join(', ') : 'none') + '</p></div>';
-  html += '<div><div class="pill">dice to roll next</div><p>' + diceLeft + '</p><p class="muted small">dice to roll equals blanks plus non scoring dice in the entered set</p></div>';
-  html += '<div><div class="pill">farkle chance next</div><p>' + (next.farkleProb*100).toFixed(2) + '%</p></div>';
-  html += '</div></div>';
-
-  // decision card with rule
-  html += '<div class="card">';
-  html += '<div class="section-title"><span class="pill">advice</span></div>';
-  html += '<p class="' + (shouldRoll? 'good':'bad') + '" style="font-size: 18px; font-weight: 600;">' + (shouldRoll? 'roll again' : 'bank it') + '</p>';
-  html += '<p class="muted small">rule used: roll if ev next is greater than farkle chance times current score. that is ev next more than p farkle times score.</p>';
-  html += '</div>';
-
-  // rule table
-  html += '<div class="card">';
-  html += '<div class="section-title"><span class="pill">expected value by rule for next roll</span></div>';
-  html += '<table><thead><tr><th>rule</th><th>prob</th><th>ev</th></tr></thead><tbody>';
-  next.byRule.forEach(row=>{
-    html += `<tr><td>${formatRuleName(row.rule)}</td><td>${(row.probability*100).toFixed(2)}%</td><td>${row.ev.toFixed(2)}</td></tr>`;
-  });
-  html += `<tr><td><strong>total</strong></td><td></td><td><strong>${next.totalEV.toFixed(2)}</strong></td></tr>`;
-  html += '</tbody></table>';
-  html += `<p class="muted small">outcomes considered ${next.outcomes}. ev sums all rule parts from the scoring logic. rules do not overlap. four with a pair is kept separate from four only. singles are counted only when dice remain after sets.</p>`;
-  html += '</div>';
-
-  // current breakdown
-  html += '<div class="card">';
-  html += '<div class="section-title"><span class="pill">current roll breakdown</span></div>';
-  if(Object.keys(comps).length===0){
-    html += '<p class="muted">no points yet.</p>';
-  }else{
-    html += '<table><thead><tr><th>rule</th><th>points</th></tr></thead><tbody>';
-    for(const [k,v] of Object.entries(comps)){
-      html += `<tr><td>${formatRuleName(k)}</td><td>${v}</td></tr>`;
-    }
-    html += `<tr><td><strong>total</strong></td><td><strong>${currentScore}</strong></td></tr>`;
-    html += '</tbody></table>';
-  }
-  html += '</div>';
-
-  // rules section at the bottom
-  html += '<div class="card">';
-  html += '<div class="section-title"><span class="pill">rules</span></div>';
-  html += '<ul class="rules-list">';
-  html += '<li>one gives 100</li>';
-  html += '<li>five gives 50</li>';
-  html += '<li>three ones gives 300</li>';
-  html += '<li>three twos gives 200</li>';
-  html += '<li>three threes gives 300</li>';
-  html += '<li>three fours gives 400</li>';
-  html += '<li>three fives gives 500</li>';
-  html += '<li>three sixes gives 600</li>';
-  html += '<li>four of a kind gives 1000</li>';
-  html += '<li>five of a kind gives 2000</li>';
-  html += '<li>six of a kind gives 3000</li>';
-  html += '<li>four with a pair gives 1500</li>';
-  html += '<li>one to six straight gives 1500</li>';
-  html += '<li>three pairs gives 1500</li>';
-  html += '<li>two triplets gives 2500</li>';
-  html += '</ul>';
-  html += '</div>';
-
-  results.innerHTML = html;
-}
-
-// *** NEW JAVASCRIPT FUNCTION ***
-function resetDice() {
-  const diceSelects = document.querySelectorAll('#inputs select');
-  diceSelects.forEach(select => {
-    select.value = '';
-  });
-  // Re-render to clear the results and show the initial state
-  render();
-}
-
-// wire up calculate button
-document.getElementById('calcBtn').addEventListener('click', render);
-// wire up reset button
-document.getElementById('resetBtn').addEventListener('click', resetDice);
-
-// do an initial render for zero dice
-render();
-</script>
 </body>
 </html>
