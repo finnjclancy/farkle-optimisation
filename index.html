@@ -135,6 +135,28 @@
     .calculate-btn:active {
       transform: translateY(0);
     }
+
+    .reset-btn {
+      padding: 14px 24px;
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 6px -1px rgba(107, 114, 128, 0.2);
+    }
+    
+    .reset-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 12px -1px rgba(107, 114, 128, 0.3);
+    }
+
+    .reset-btn:active {
+      transform: translateY(0);
+    }
     
     .card { 
       background: white;
@@ -310,6 +332,7 @@
       <div class="row" id="inputs"></div>
       <div class="row" style="margin-top: 20px;">
         <button class="calculate-btn" id="calcBtn">calculate</button>
+        <button class="reset-btn" id="resetBtn">reset</button>
       </div>
     </div>
 
@@ -535,13 +558,11 @@ function computeCurrentScoreAndDiceLeft(){
   const nonScoringAmongEntered = dice.length - scored.used;
   let diceLeft = blanks + nonScoringAmongEntered;
 
-  // *** CORRECTION IS HERE ***
   // If all dice used for scoring result in 0 dice left to roll,
   // it's "hot dice", so the player gets to roll all 6 again.
   if (diceLeft === 0 && scored.used > 0) {
     diceLeft = 6;
   }
-  // *** END CORRECTION ***
 
   return { currentDice: dice, currentScore: scored.total, comps: scored.comps, diceLeft };
 }
@@ -561,7 +582,8 @@ function render(){
   q += `<div class="box"><div class="label">current score</div><div class="value">${currentScore}</div></div>`;
   q += `<div class="box"><div class="label">ev next roll</div><div class="value">${next.totalEV.toFixed(2)}</div></div>`;
   const decision = shouldRoll ? 'roll again' : 'bank it';
-  q += `<div class="box"><div class="label">decision</div><div class="value ${shouldRoll?'good':'bad'}">${decision}</div><div class="label">current ${currentScore} vs ev ${next.totalEV.toFixed(2)}</div></div>`;
+  const risk = currentScore * next.farkleProb;
+  q += `<div class="box"><div class="label">decision</div><div class="value ${shouldRoll?'good':'bad'}">${decision}</div><div class="label small">risk ${risk.toFixed(2)} vs. EV ${next.totalEV.toFixed(2)}</div></div>`;
   q += `<div class="box"><div class="label">farkle percent</div><div class="value">${(next.farkleProb*100).toFixed(2)}%</div></div>`;
   q += '</div></div>';
   quick.innerHTML = q;
@@ -632,8 +654,20 @@ function render(){
   results.innerHTML = html;
 }
 
-// wire up
+// *** NEW JAVASCRIPT FUNCTION ***
+function resetDice() {
+  const diceSelects = document.querySelectorAll('#inputs select');
+  diceSelects.forEach(select => {
+    select.value = '';
+  });
+  // Re-render to clear the results and show the initial state
+  render();
+}
+
+// wire up calculate button
 document.getElementById('calcBtn').addEventListener('click', render);
+// wire up reset button
+document.getElementById('resetBtn').addEventListener('click', resetDice);
 
 // do an initial render for zero dice
 render();
