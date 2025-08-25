@@ -464,6 +464,9 @@ function scoreRoll(dice){
 
 // enumerate all outcomes for n dice, compute expected values per rule
 function enumerateOutcomes(n){
+  if (n === 0) {
+    return { byRule: [], totalEV: 0, farkleProb: 1, outcomes: 1 };
+  }
   const totalOutcomes = Math.pow(6, n);
   const ev = {}; // rule -> sum of points across all outcomes
   let farkleCount = 0;
@@ -530,7 +533,15 @@ function computeCurrentScoreAndDiceLeft(){
   const scored = scoreRoll(dice);
   // dice used are scoring dice among the entered set
   const nonScoringAmongEntered = dice.length - scored.used;
-  const diceLeft = blanks + nonScoringAmongEntered;
+  let diceLeft = blanks + nonScoringAmongEntered;
+
+  // *** CORRECTION IS HERE ***
+  // If all dice used for scoring result in 0 dice left to roll,
+  // it's "hot dice", so the player gets to roll all 6 again.
+  if (diceLeft === 0 && scored.used > 0) {
+    diceLeft = 6;
+  }
+  // *** END CORRECTION ***
 
   return { currentDice: dice, currentScore: scored.total, comps: scored.comps, diceLeft };
 }
